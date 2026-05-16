@@ -154,6 +154,10 @@ const translations = {
     footer_whatsapp: "WhatsApp",
     footer_copyright: (year: number) => `© ${year} Palma d'Or. All rights reserved.`,
 
+    // Reviews
+    reviews_tag: "Voices of Palma d'Or",
+    reviews_heading: "Voices of Palma d'Or",
+
     // Modal
     modal_reserve: "Reserve This Piece",
 
@@ -253,6 +257,10 @@ const translations = {
     footer_whatsapp: "WhatsApp",
     footer_copyright: (year: number) => `© ${year} Palma d'Or. Tous droits réservés.`,
 
+    // Reviews
+    reviews_tag: "Témoignages",
+    reviews_heading: "Témoignages",
+
     // Modal
     modal_reserve: "Réserver Cette Pièce",
 
@@ -351,6 +359,10 @@ const translations = {
     footer_instagram: "إنستغرام",
     footer_whatsapp: "واتساب",
     footer_copyright: (year: number) => `© ${year} Palma d'Or. جميع الحقوق محفوظة.`,
+
+    // Reviews
+    reviews_tag: "آراء عملائنا",
+    reviews_heading: "آراء عملائنا",
 
     // Modal
     modal_reserve: "احجز هذه القطعة",
@@ -496,10 +508,16 @@ function CustomCursor() {
     let onLightBg = false;
     let isHovering = false;
     let hoverText = "";
-    let lastBgCheck = 0;
-    let mouseX = 0;
-    let mouseY = 0;
+
+    // Position state — written by mousemove, read by rAF — no React state
+    let mouseX = -100;
+    let mouseY = -100;
     let rafId: number | null = null;
+
+    // Background check state — decoupled from mousemove hot path
+    let bgCheckX = 0;
+    let bgCheckY = 0;
+    let bgCheckPending = false;
 
     const DARK_COLORS = {
       dot: "#D4AF37",
@@ -539,28 +557,10 @@ function CustomCursor() {
       }
     };
 
-    // rAF loop — reads latest mouse position, writes once per frame via translate3d
-    const renderFrame = () => {
-      cursor.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
-      rafId = null;
-    };
-
-    const scheduleFrame = () => {
-      if (rafId === null) {
-        rafId = requestAnimationFrame(renderFrame);
-      }
-    };
-
-    const moveCursor = (e: MouseEvent) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
-      scheduleFrame();
-
-      // Background luminance check — throttled to ~5x/sec
-      const now = Date.now();
-      if (now - lastBgCheck < 200) return;
-      lastBgCheck = now;
-      const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    // Deferred background luminance check — runs outside mousemove, no layout thrash
+    const runBgCheck = () => {
+      bgCheckPending = false;
+      const el = document.elementFromPoint(bgCheckX, bgCheckY) as HTMLElement | null;
       if (el) {
         let current: HTMLElement | null = el;
         for (let i = 0; i < 3 && current; i++) {
@@ -580,6 +580,38 @@ function CustomCursor() {
       }
     };
 
+    // rAF loop — reads latest mouse position, writes transform once per frame
+    const renderFrame = () => {
+      cursor.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
+      rafId = null;
+    };
+
+    const scheduleFrame = () => {
+      if (rafId === null) {
+        rafId = requestAnimationFrame(renderFrame);
+      }
+    };
+
+    // Mousemove — ultra-light: only store coords + schedule frame
+    const onMouseMove = (e: MouseEvent) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      scheduleFrame();
+
+      // Throttle bg check to ~4x/sec via requestIdleCallback fallback
+      if (!bgCheckPending) {
+        bgCheckPending = true;
+        bgCheckX = e.clientX;
+        bgCheckY = e.clientY;
+        setTimeout(runBgCheck, 250);
+      }
+    };
+
+    // Scroll — keep cursor position accurate during scrolling
+    const onScroll = () => {
+      scheduleFrame();
+    };
+
     const handleMouseOver = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (target.closest("[data-cursor='view']")) {
@@ -596,11 +628,13 @@ function CustomCursor() {
       }
     };
 
-    window.addEventListener("mousemove", moveCursor, { passive: true });
+    window.addEventListener("mousemove", onMouseMove, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     document.addEventListener("mouseover", handleMouseOver, { passive: true });
     document.addEventListener("mouseout", handleMouseOut, { passive: true });
     return () => {
-      window.removeEventListener("mousemove", moveCursor);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("scroll", onScroll);
       document.removeEventListener("mouseover", handleMouseOver);
       document.removeEventListener("mouseout", handleMouseOut);
       if (rafId !== null) cancelAnimationFrame(rafId);
@@ -628,7 +662,6 @@ function CustomCursor() {
           width: 18, height: 18, marginLeft: -9, marginTop: -9,
           border: "1px solid #D4AF37",
           willChange: "transform",
-          transition: "transform 0.1s ease-out, background-color 0.1s ease-out",
           transform: "scale(1) translateZ(0)",
         }}
       >
@@ -2060,6 +2093,188 @@ function InstagramSection() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   REVIEWS — Multilingual Luxury Testimonials
+   ═══════════════════════════════════════════════════════════════ */
+
+const reviewsData: { lang: Lang; name: string; text: string }[] = [
+  // English reviews
+  {
+    lang: "en",
+    name: "Isabella Laurent",
+    text: "An expression of rare refinement. Each creation reflects a maison devoted to excellence and distinction.",
+  },
+  {
+    lang: "en",
+    name: "Michael Davenport",
+    text: "A masterful balance of craftsmanship and elegance. Palma d'Or transforms gifting into a statement of taste.",
+  },
+  {
+    lang: "en",
+    name: "Sophia Bennett",
+    text: "Subtle, sophisticated, and impeccably curated. A signature worthy of the most elevated occasions.",
+  },
+  {
+    lang: "en",
+    name: "Alexander Moore",
+    text: "From presentation to flavor, every detail embodies precision and understated luxury.",
+  },
+  {
+    lang: "en",
+    name: "Olivia Harrington",
+    text: "A refined experience that speaks of heritage, artistry, and uncompromising quality.",
+  },
+  {
+    lang: "en",
+    name: "James Whitmore",
+    text: "Palma d'Or stands as a testament to timeless elegance and modern savoir-faire.",
+  },
+  // French reviews
+  {
+    lang: "fr",
+    name: "Camille Dubois",
+    text: "Une signature d'exception où chaque détail révèle un savoir-faire rare et une élégance intemporelle.",
+  },
+  {
+    lang: "fr",
+    name: "Julien Moreau",
+    text: "Un équilibre parfait entre tradition et raffinement. Une véritable maison de prestige.",
+  },
+  {
+    lang: "fr",
+    name: "Sophie Laurent",
+    text: "Une expérience sensorielle subtile, pensée avec une précision remarquable.",
+  },
+  {
+    lang: "fr",
+    name: "Antoine Girard",
+    text: "L'excellence dans sa forme la plus pure. Une maison qui honore l'art du détail.",
+  },
+  {
+    lang: "fr",
+    name: "Claire Fontaine",
+    text: "Un raffinement discret et une qualité irréprochable à chaque création.",
+  },
+  {
+    lang: "fr",
+    name: "Louis Bernard",
+    text: "Une maison d'exception où tradition et modernité s'unissent avec grâce.",
+  },
+  // Arabic reviews (Moroccan Darija)
+  {
+    lang: "ar",
+    name: "فاطمة الزهراء",
+    text: "بصّح تجربة راقية بكل معنى الكلمة، كل تفصيل فيها فيه الذوق والاتقان.",
+  },
+  {
+    lang: "ar",
+    name: "يوسف الإدريسي",
+    text: "منتوج فاخر، التغليف راقي والخدمة فالمستوى العالي.",
+  },
+  {
+    lang: "ar",
+    name: "أمينة العلوي",
+    text: "تحفة فنية حقيقية، كيبان فيها المجهود والحرفية الرفيعة.",
+  },
+  {
+    lang: "ar",
+    name: "حمزة المنصوري",
+    text: "ذوق عالي وجودة ممتازة، تجربة كتخليك تحس بالفخامة.",
+  },
+  {
+    lang: "ar",
+    name: "سلمى بناني",
+    text: "كلشي مدروس بعناية، من المذاق حتى لأدق التفاصيل.",
+  },
+  {
+    lang: "ar",
+    name: "عمر الشاوي",
+    text: "منتوج مميز فعلاً، كيستاهل يتقدم فأرقى المناسبات.",
+  },
+];
+
+function ReviewSection() {
+  const { t, lang, isRTL } = useLanguage();
+  const { ref, isInView } = useInViewAnimate(0.1);
+
+  const filteredReviews = reviewsData.filter((r) => r.lang === lang);
+
+  return (
+    <section
+      id="reviews"
+      className="relative py-24 md:py-36 bg-white overflow-hidden"
+    >
+
+      <div ref={ref} className="max-w-7xl mx-auto px-6 relative z-10">
+        <motion.div
+          className="text-center mb-20 md:mb-28"
+          initial={{ opacity: 0, y: 50 }}
+          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 1.4, ease: [0.25, 0.8, 0.25, 1] }}
+        >
+          <SectionTag variant="light">{t.reviews_tag}</SectionTag>
+          <h2
+            className={`text-4xl sm:text-5xl md:text-7xl text-noir/85 font-light luxury-underline in-view ${isRTL ? "font-amiri" : "font-cormorant"}`}
+            style={isRTL ? { fontWeight: 600, letterSpacing: "0.05em" } : undefined}
+          >
+            {t.reviews_heading}
+          </h2>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12 max-w-5xl mx-auto">
+          {filteredReviews.map((review, i) => (
+            <motion.div
+              key={review.name}
+              className="text-center"
+              initial={{ opacity: 0, y: 30 }}
+              animate={isInView ? { opacity: 1, y: 0 } : {}}
+              transition={{
+                duration: 1.2,
+                delay: 0.4 + i * 0.2,
+                ease: [0.25, 0.8, 0.25, 1],
+              }}
+            >
+              {/* Opening quote mark */}
+              <span
+                className={`block text-gold/50 mb-6 ${isRTL ? "font-amiri" : "font-cormorant"}`}
+                style={{ fontSize: "3.2rem", lineHeight: 1 }}
+              >
+                &ldquo;
+              </span>
+
+              {/* Review text */}
+              <p
+                className={`leading-[2.4] tracking-[0.04em] mb-8 text-noir ${
+                  review.lang === "ar"
+                    ? "font-amiri text-[16px] sm:text-[17px]"
+                    : review.lang === "fr"
+                      ? "font-cormorant text-[15px] sm:text-lg italic font-light"
+                      : "font-cormorant text-[15px] sm:text-lg italic font-light"
+                }`}
+              >
+                {review.text}
+              </p>
+
+              {/* Client name */}
+              <p
+                className={`text-[#B8941F] tracking-[0.15em] ${
+                  review.lang === "ar"
+                    ? "font-amiri text-[16px] font-semibold"
+                    : "font-montserrat text-[12px] uppercase font-semibold"
+                }`}
+              >
+                {review.name}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      <GoldDivider className="absolute bottom-0 left-0 right-0" />
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    FOOTER — Refined Minimalism
    ═══════════════════════════════════════════════════════════════ */
 
@@ -2259,7 +2474,7 @@ function WhatsAppFloat() {
    ═══════════════════════════════════════════════════════════════ */
 
 function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLang] = useState<Lang>("en");
+  const [lang, setLang] = useState<Lang>("fr");
   const [fadeState, setFadeState] = useState<"in" | "out">("in");
 
   const switchLang = useCallback((newLang: Lang) => {
@@ -2323,6 +2538,7 @@ function InnerHome() {
           <MarqueeStrip />
           <CustomizationSection />
           <InstagramSection />
+          <ReviewSection />
           <Footer />
           <WhatsAppFloat />
     </main>
